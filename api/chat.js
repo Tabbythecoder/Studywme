@@ -49,7 +49,24 @@ export default async function handler(req, res) {
     }
 
     const { messages = [], contextData = null } = body || {};
-    const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+    const apiKey = (process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '').trim();
+
+    // Check if API key is present
+    if (!apiKey) {
+      return sendResponse(res, 200, {
+        success: false,
+        error: 'MISSING_API_KEY',
+        text: `⚠️ **Chưa tìm thấy Gemini API Key trên Vercel!**
+
+Hệ thống đã kiểm tra cả \`process.env.GEMINI_API_KEY\` lẫn \`process.env.VITE_GEMINI_API_KEY\` nhưng giá trị hiện đang rỗng.
+
+**Cách khắc phục:**
+1. Truy cập **Vercel Dashboard** > Chọn dự án **Studywme**.
+2. Vào **Settings** > **Environment Variables**.
+3. Thêm biến \`GEMINI_API_KEY\` với giá trị là API Key lấy từ **Google AI Studio**.
+4. Chọn Redeploy lại dự án để Vercel nạp biến môi trường mới.`
+      });
+    }
 
     const systemInstruction = `Bạn là Trợ giảng AI cho học sinh Lớp 10 (Chương trình GDPT 2018 Việt Nam).
 Nguyên tắc sư phạm:
@@ -58,11 +75,9 @@ Nguyên tắc sư phạm:
 - Sử dụng công thức LaTeX $...$ cho công thức ngắn và $$...$$ cho công thức khối.
 - Giọng văn đồng hành, nghiêm túc, tập trung vào bản chất logic.`;
 
-    // If Gemini API Key is configured on Vercel
-    if (apiKey && apiKey.trim()) {
-      let contextPrefix = '';
-      if (contextData) {
-        contextPrefix = `[Ngữ cảnh câu hỏi Lớp 10]:
+    let contextPrefix = '';
+    if (contextData) {
+      contextPrefix = `[Ngữ cảnh câu hỏi Lớp 10]:
 - Môn học: ${contextData.subject || 'Lớp 10'}
 - Bài học: ${contextData.lesson || ''}
 - Đề bài: "${contextData.question || ''}"
@@ -70,105 +85,107 @@ Nguyên tắc sư phạm:
 - Đáp án đúng: "${contextData.correctAnswer || ''}"
 ---
 `;
-      }
+    }
 
-      // Build valid Gemini contents array
-      const contents = [];
-      const validMessages = messages.filter((m) => m && m.text && m.text.trim());
+    // Build valid Gemini contents array
+    const contents = [];
+    const validMessages = messages.filter((m) => m && m.text && m.text.trim());
 
-      if (validMessages.length === 0) {
-        contents.push({
-          role: 'user',
-          parts: [{ text: contextPrefix || 'Xin chào gia sư' }]
-        });
-      } else {
-        validMessages.forEach((msg, idx) => {
-          let text = msg.text.trim();
-          if (idx === 0 && contextPrefix) {
-            text = `${contextPrefix}\n${text}`;
-          }
-          contents.push({
-            role: msg.role === 'user' ? 'user' : 'model',
-            parts: [{ text }]
-          });
-        });
-      }
-
-      // Priority list of models: try gemini-2.5-flash, fallback to 2.0-flash, then 1.5-flash
-      const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
-      for (const model of modelsToTry) {
-        try {
-          const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
-          const geminiRes = await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              systemInstruction: {
-                parts: [{ text: systemInstruction }]
-              },
-              contents,
-              generationConfig: {
-                temperature: 0.35,
-                maxOutputTokens: 800
-              }
-            })
-          });
-
-          const resData = await geminiRes.json().catch(() => ({}));
-          if (geminiRes.ok) {
-            const reply = resData.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (reply) {
-              return sendResponse(res, 200, {
-                success: true,
-                text: reply,
-                modelUsed: model
-              });
-            }
-          } else {
-            console.warn(`Gemini (${model}) returned status ${geminiRes.status}:`, resData.error?.message);
-          }
-        } catch (fetchErr) {
-          console.warn(`Error calling model ${model}:`, fetchErr.message);
+    if (validMessages.length === 0) {
+      contents.push({
+        role: 'user',
+        parts: [{ text: contextPrefix || 'Xin chào gia sư Lớp 10' }]
+      });
+    } else {
+      validMessages.forEach((msg, idx) => {
+        let text = msg.text.trim();
+        if (idx === 0 && contextPrefix) {
+          text = `${contextPrefix}\n${text}`;
         }
+        contents.push({
+          role: msg.role === 'user' ? 'user' : 'model',
+          parts: [{ text }]
+        });
+      });
+    }
+
+    // Priority: Try gemini-2.5-flash as requested, then gemini-2.0-flash, then gemini-1.5-flash
+    const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    let lastErrorDetails = null;
+
+    for (const model of modelsToTry) {
+      try {
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const geminiRes = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            systemInstruction: {
+              parts: [{ text: systemInstruction }]
+            },
+            contents,
+            generationConfig: {
+              temperature: 0.35,
+              maxOutputTokens: 1000
+            }
+          })
+        });
+
+        const resData = await geminiRes.json().catch(() => ({}));
+
+        if (geminiRes.ok) {
+          const reply = resData.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (reply) {
+            return sendResponse(res, 200, {
+              success: true,
+              text: reply,
+              modelUsed: model
+            });
+          }
+        } else {
+          lastErrorDetails = {
+            model,
+            status: geminiRes.status,
+            error: resData.error || resData
+          };
+          console.error(`Google API Error with ${model}:`, geminiRes.status, resData);
+        }
+      } catch (err) {
+        lastErrorDetails = {
+          model,
+          status: 500,
+          error: { message: err.message }
+        };
+        console.error(`Fetch exception for ${model}:`, err);
       }
     }
 
-    // Default pedagogical fallback (when no key or upstream limit reached)
-    const fallbackText = getPedagogicalExplanation(contextData);
+    // Return the EXACT error message from Google API to the frontend
+    const errObj = lastErrorDetails?.error || {};
+    const errMsg = errObj.message || JSON.stringify(errObj);
+    const errStatus = lastErrorDetails?.status || 500;
+    const errModel = lastErrorDetails?.model || 'gemini-2.5-flash';
+
     return sendResponse(res, 200, {
-      success: true,
-      text: fallbackText,
-      modelUsed: 'studywme-tutor'
+      success: false,
+      error: `Google Gemini API Error (${errStatus})`,
+      text: `⚠️ **Thông báo lỗi từ Google Gemini API (Model: \`${errModel}\` - HTTP ${errStatus}):**
+
+\`\`\`json
+${JSON.stringify(errObj, null, 2)}
+\`\`\`
+
+**Chi tiết:** ${errMsg}
+
+*Gợi ý kiểm tra: Hãy đảm bảo API Key đã được cấp quyền Generative Language API trên Google AI Studio và không bị giới hạn IP/HTTP referrer.*`
     });
-  } catch (error) {
-    console.error('API Chat Exception:', error);
-    return sendResponse(res, 200, {
-      success: true,
-      text: getPedagogicalExplanation(null),
-      error: error.message
+
+  } catch (globalErr) {
+    console.error('Serverless Handler Crash:', globalErr);
+    return sendResponse(res, 500, {
+      success: false,
+      error: globalErr.message,
+      text: `⚠️ **Lỗi thực thi Serverless Function:**\n\`\`\`\n${globalErr.message}\n\`\`\``
     });
   }
-}
-
-function getPedagogicalExplanation(context) {
-  if (context && context.userWrongAnswer) {
-    return `### Phân tích lỗi sai:
-Bạn vừa chọn phương án **${context.userWrongAnswer}**, trong khi đáp án chính xác là **${context.correctAnswer}**.
-
-**1. Điểm nhầm lẫn phổ biến:**
-Học sinh lớp 10 thường gặp bẫy ở bước xác định điều kiện biên hoặc chưa chú ý điều kiện áp dụng định lý.
-
-**2. Bản chất lý thuyết:**
-${context.explanation || 'Hãy kiểm tra lại mối liên hệ giữa các đại lượng trong công thức và chú ý điều kiện áp dụng.'}
-
-**3. Lời khuyên:**
-Xem lại công thức chuẩn của bài học và thử tính toán lại từng bước nhé. Bạn có thể hỏi thêm bất kỳ điểm nào chưa rõ ở bên dưới!`;
-  }
-
-  return `Chào bạn, mình là Trợ giảng AI cho chương trình Lớp 10 (GDPT 2018).
-Mình có thể giúp bạn giải đáp các vấn đề về:
-- **Toán 10:** Tập hợp, Bất phương trình, Vectơ, Lượng giác trong tam giác.
-- **Vật lí 10:** Động học, 3 định luật Newton, Công & Năng lượng.
-- **Hóa học 10:** Cấu tạo nguyên tử, Bảng tuần hoàn, Oxi hóa - khử.
-- **Tin học 10:** Mã hóa nhị phân, Lập trình Python cơ bản.`;
 }

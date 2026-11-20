@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Send, Sparkles, Bot } from 'lucide-react';
+import { X, Send, Sparkles, AlertTriangle } from 'lucide-react';
 import { sendChatMessageToTutor } from '../services/aiTutor';
 import MathView from './MathView';
 
@@ -68,6 +68,7 @@ Bạn có thắc mắc bài toán, định luật vật lí, phương trình hó
           role: 'model',
           text: res.text,
           modelUsed: res.modelUsed,
+          isError: res.isError,
           timestamp: new Date()
         }
       ]);
@@ -76,7 +77,7 @@ Bạn có thắc mắc bài toán, định luật vật lí, phương trình hó
         ...prev,
         {
           role: 'model',
-          text: `Đã xảy ra lỗi kết nối: ${err.message}. Bạn hãy thử gửi lại câu hỏi nhé.`,
+          text: `⚠️ **Lỗi kết nối:** ${err.message}`,
           isError: true,
           timestamp: new Date()
         }
@@ -101,13 +102,13 @@ Bạn có thắc mắc bài toán, định luật vật lí, phương trình hó
     await fetchAIResponse(newMsgs, contextData);
   };
 
-  // Helper formatter for responses (supporting KaTeX formulas $...$)
-  const renderMessageText = (content) => {
-    if (!content) return null;
-    const lines = content.split('\n');
+  // Helper formatter for text with markdown bold, inline code, and KaTeX
+  const renderParagraphs = (rawText, blockKey = 0) => {
+    if (!rawText) return null;
+    const lines = rawText.split('\n');
 
     return (
-      <div className="space-y-2 text-xs leading-relaxed">
+      <div key={blockKey} className="space-y-1.5 text-xs leading-relaxed">
         {lines.map((line, idx) => {
           if (!line.trim()) return <div key={idx} className="h-1" />;
 
@@ -121,17 +122,30 @@ Bạn có thắc mắc bài toán, định luật vật lí, phương trình hó
                   const formula = part.slice(1, -1);
                   return <MathView key={pIdx} math={formula} />;
                 }
-                // Handle markdown bold **text**
-                const boldParts = part.split(/(\*\*[^*]+\*\*)/g);
-                return boldParts.map((bp, bIdx) => {
-                  if (bp.startsWith('**') && bp.endsWith('**')) {
+                
+                // Parse inline backticks `...`
+                const codeParts = part.split(/(`[^`]+`)/g);
+                return codeParts.map((cp, cIdx) => {
+                  if (cp.startsWith('`') && cp.endsWith('`')) {
                     return (
-                      <strong key={bIdx} className="font-semibold text-[var(--text-primary)]">
-                        {bp.slice(2, -2)}
-                      </strong>
+                      <code key={cIdx} className="font-mono text-[11px] px-1 py-0.2 rounded bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--accent)]">
+                        {cp.slice(1, -1)}
+                      </code>
                     );
                   }
-                  return bp;
+
+                  // Handle markdown bold **text**
+                  const boldParts = cp.split(/(\*\*[^*]+\*\*)/g);
+                  return boldParts.map((bp, bIdx) => {
+                    if (bp.startsWith('**') && bp.endsWith('**')) {
+                      return (
+                        <strong key={bIdx} className="font-semibold text-[var(--text-primary)]">
+                          {bp.slice(2, -2)}
+                        </strong>
+                      );
+                    }
+                    return bp;
+                  });
                 });
               })}
             </div>
@@ -139,6 +153,37 @@ Bạn có thắc mắc bài toán, định luật vật lí, phương trình hó
         })}
       </div>
     );
+  };
+
+  const renderMessageText = (content) => {
+    if (!content) return null;
+
+    // Check for fenced code blocks ```...```
+    if (content.includes('```')) {
+      const codeBlockParts = content.split(/(```[\s\S]*?```)/g);
+      return (
+        <div className="space-y-2 text-xs leading-relaxed">
+          {codeBlockParts.map((block, bIdx) => {
+            if (block.startsWith('```') && block.endsWith('```')) {
+              const codeLines = block.slice(3, -3);
+              const firstLineBreak = codeLines.indexOf('\n');
+              const language = firstLineBreak !== -1 ? codeLines.slice(0, firstLineBreak).trim() : '';
+              const codeBody = firstLineBreak !== -1 ? codeLines.slice(firstLineBreak + 1) : codeLines;
+
+              return (
+                <div key={bIdx} className="my-2 p-2.5 rounded-[4px] border border-[var(--border-subtle)] bg-[var(--bg-primary)] font-mono text-[11px] overflow-x-auto text-[var(--text-primary)]">
+                  {language && <div className="text-[10px] text-[var(--text-muted)] uppercase mb-1 font-semibold">{language}</div>}
+                  <pre className="whitespace-pre-wrap">{codeBody}</pre>
+                </div>
+              );
+            }
+            return renderParagraphs(block, bIdx);
+          })}
+        </div>
+      );
+    }
+
+    return renderParagraphs(content, 0);
   };
 
   return (
@@ -206,24 +251,33 @@ Bạn có thắc mắc bài toán, định luật vật lí, phương trình hó
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {messages.map((msg, i) => {
                 const isUser = msg.role === 'user';
+                const isErr = msg.isError;
 
                 return (
                   <div
                     key={i}
                     className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
                   >
-                    <div className="text-[10px] font-mono text-[var(--text-muted)] mb-1 px-1">
-                      {isUser ? 'Bạn' : 'AI Tutor'}
+                    <div className="text-[10px] font-mono text-[var(--text-muted)] mb-1 px-1 flex items-center gap-1.5">
+                      <span>{isUser ? 'Bạn' : 'AI Tutor'}</span>
                       {msg.modelUsed && (
-                        <span className="ml-1 text-[var(--accent)] font-medium">({msg.modelUsed})</span>
+                        <span className="text-[var(--accent)] font-medium">({msg.modelUsed})</span>
+                      )}
+                      {isErr && (
+                        <span className="text-[var(--error)] flex items-center gap-0.5">
+                          <AlertTriangle className="w-3 h-3" />
+                          Lỗi
+                        </span>
                       )}
                     </div>
 
                     <div
-                      className={`max-w-[92%] p-3 rounded-[6px] border ${
+                      className={`max-w-[95%] p-3 rounded-[6px] border ${
                         isUser
                           ? 'bg-[var(--bg-tertiary)] border-[var(--border-subtle)] text-[var(--text-primary)]'
-                          : 'bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-primary)]'
+                          : isErr
+                            ? 'bg-[var(--error-bg)] border-[var(--error-border)] text-[var(--text-primary)]'
+                            : 'bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-primary)]'
                       }`}
                     >
                       {renderMessageText(msg.text)}
@@ -239,7 +293,7 @@ Bạn có thắc mắc bài toán, định luật vật lí, phương trình hó
                   </div>
                   <div className="p-3 rounded-[6px] border border-[var(--border-subtle)] bg-[var(--bg-secondary)] text-xs text-[var(--text-muted)] font-mono flex items-center gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-pulse" />
-                    <span>Đang phân tích câu sai & suy luận...</span>
+                    <span>Đang gọi Google Gemini 2.5 Flash...</span>
                   </div>
                 </div>
               )}
