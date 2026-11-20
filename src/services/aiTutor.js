@@ -1,87 +1,159 @@
 /**
- * AI Tutor Service (Gemini Ready)
+ * Studywme AI Tutor Service
  * 
- * Hướng dẫn tích hợp Gemini API Key:
- * 1. Tạo file `.env` tại thư mục gốc dự án:
- *    VITE_GEMINI_API_KEY=your_gemini_api_key_here
- * 2. Hàm askAITutor() sẽ tự động ưu tiên gọi Google Gemini API nếu có key.
- *    Nếu chưa có key, hệ thống sẽ sử dụng dữ liệu phản hồi mẫu chuẩn sư phạm.
+ * BYOK Architecture (Bring Your Own Key):
+ * - Key priority: localStorage('studywme_gemini_key') -> import.meta.env.VITE_GEMINI_API_KEY
+ * - Model: gemini-2.5-flash (with fallback to gemini-1.5-flash if needed)
+ * - Persona: Gia sư chuẩn kiến thức Lớp 10 (Chương trình GDPT 2018), sư phạm tinh gọn,
+ *   tập trung chỉ ra bản chất tại sao học sinh chọn sai và hướng dẫn cách tư duy đúng.
  */
 
-export async function askAITutor({ questionId, questionTitle, context, customKey = null }) {
-  const apiKey = customKey || import.meta.env.VITE_GEMINI_API_KEY;
+export const STORAGE_KEY_GEMINI = 'studywme_gemini_key';
+
+export function getSavedGeminiKey() {
+  if (typeof window === 'undefined') return '';
+  return localStorage.getItem(STORAGE_KEY_GEMINI) || import.meta.env.VITE_GEMINI_API_KEY || '';
+}
+
+export function saveGeminiKey(key) {
+  if (typeof window === 'undefined') return;
+  if (key && key.trim()) {
+    localStorage.setItem(STORAGE_KEY_GEMINI, key.trim());
+  } else {
+    localStorage.removeItem(STORAGE_KEY_GEMINI);
+  }
+}
+
+/**
+ * Call Gemini API with conversational context
+ * @param {Array<{role: 'user' | 'model', text: string}>} history
+ * @param {Object} contextData { subject, lesson, question, userWrongAnswer, correctAnswer }
+ */
+export async function sendChatMessageToTutor({ messages, contextData = null }) {
+  const apiKey = getSavedGeminiKey();
+
+  const systemInstruction = `Bạn là Trợ giảng AI cho học sinh Lớp 10 (Chương trình GDPT 2018 Việt Nam).
+Nguyên tắc sư phạm:
+- Ngắn gọn, súc tích, chuẩn ngôn ngữ khoa học.
+- Tuyệt đối không đưa ngay đáp án cuối nếu học sinh đang hỏi gợi ý, hãy phân tích vì sao phương án học sinh chọn lại chưa chính xác (misconception).
+- Sử dụng công thức LaTeX dạng $...$ cho công thức toán/lý/hóa ngắn, hoặc $$...$$ cho công thức khối.
+- Giọng văn đồng hành, nghiêm túc, tập trung vào bản chất logic.`;
 
   if (apiKey) {
     try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  {
-                    text: `Bạn là trợ giảng cá nhân theo phong cách tư duy phản biện và sư phạm tinh gọn (Socratic method).
-Nội dung bài học: ${context || 'Kiến thức phổ thông / Đại học'}
-Câu hỏi của học viên: "${questionTitle}"
+      // Build conversation contents for Gemini API
+      const contents = [];
 
-Hãy đưa ra hướng dẫn theo 3 bước:
-1. Gợi ý bản chất vấn đề (không giải ngay kết quả cuối).
-2. Công thức hoặc định luật then chốt cần áp dụng.
-3. Bước biến đổi quan trọng nhất.`
-                  }
-                ]
-              }
-            ],
-            generationConfig: {
-              temperature: 0.3,
-              maxOutputTokens: 600,
-            }
-          })
-        }
-      );
-
-      const data = await response.json();
-      if (data.candidates && data.candidates[0]?.content?.parts[0]?.text) {
-        return {
-          success: true,
-          source: 'gemini-live',
-          content: data.candidates[0].content.parts[0].text
-        };
+      // If context provided, prepend system context as initial turn or inject into first prompt
+      let contextPrefix = '';
+      if (contextData) {
+        contextPrefix = `[Ngữ cảnh học tập lớp 10]:
+- Môn học: ${contextData.subject || 'Lớp 10'}
+- Bài học: ${contextData.lesson || ''}
+- Đề bài câu hỏi: "${contextData.question || ''}"
+- Học sinh vừa chọn sai đáp án: "${contextData.userWrongAnswer || ''}"
+- Đáp án chính xác là: "${contextData.correctAnswer || ''}"
+---
+`;
       }
-    } catch (err) {
-      console.warn('Lỗi kết nối Gemini API, chuyển sang dữ liệu mẫu dự phòng:', err);
+
+      // Map messages array to Gemini format
+      messages.forEach((msg, idx) => {
+        let text = msg.text;
+        if (idx === 0 && contextPrefix) {
+          text = `${contextPrefix}\n${text}`;
+        }
+        contents.push({
+          role: msg.role === 'user' ? 'user' : 'model',
+          parts: [{ text }]
+        });
+      });
+
+      // Try gemini-2.5-flash first as requested, fallback to gemini-1.5-flash
+      const modelsToTry = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+      let lastError = null;
+
+      for (const model of modelsToTry) {
+        try {
+          const res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                systemInstruction: {
+                  parts: [{ text: systemInstruction }]
+                },
+                contents,
+                generationConfig: {
+                  temperature: 0.35,
+                  maxOutputTokens: 800
+                }
+              })
+            }
+          );
+
+          if (!res.ok) {
+            const errJson = await res.json().catch(() => ({}));
+            throw new Error(errJson.error?.message || `HTTP ${res.status}`);
+          }
+
+          const data = await res.json();
+          const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (replyText) {
+            return {
+              success: true,
+              text: replyText,
+              modelUsed: model
+            };
+          }
+        } catch (err) {
+          lastError = err;
+          console.warn(`Lỗi gọi model ${model}:`, err.message);
+        }
+      }
+
+      throw lastError || new Error('Không nhận được phản hồi từ Gemini API');
+    } catch (apiError) {
+      console.warn('Fallback to local pedagogical engine:', apiError);
+      return {
+        success: false,
+        error: apiError.message,
+        text: getLocalPedagogicalFallback(contextData, messages[messages.length - 1]?.text)
+      };
     }
   }
 
-  // Dữ liệu gợi ý mẫu sư phạm chuẩn hóa (fallback khi chưa nhập Gemini Key)
-  await new Promise((resolve) => setTimeout(resolve, 450));
-
-  const sampleHints = {
-    'q-calc-1': `**Gợi ý tư duy:**
-1. **Bản chất:** Ta đang tìm nguyên hàm của tích hai hàm số khác loại: $x$ (hàm đa thức) và $e^{2x}$ (hàm mũ).
-2. **Phương pháp:** Áp dụng phương pháp nguyên hàm từng phần $\\int u \\, dv = uv - \\int v \\, du$.
-3. **Thứ tự ưu tiên đặt $u$:** "Nhất log, nhì đa, tam lượng, tứ mũ". Do đó hãy đặt $u = x$ và $dv = e^{2x}dx$.
-4. **Lưu ý dấu hệ số:** Khi tính $v = \\int e^{2x}dx$, đừng quên chia cho hệ số góc là $2$ ($v = \\frac{1}{2}e^{2x}$).`,
-
-    'q-phys-1': `**Gợi ý tư duy:**
-1. **Bản chất:** Con lắc đơn dao động điều hòa trong trọng trường. Chu kỳ $T$ phụ thuộc vào chiều dài dây treo $l$ và gia tốc trọng trường $g$.
-2. **Công thức then chốt:** $T = 2\\pi \\sqrt{\\frac{l}{g}}$.
-3. **Phân tích tỉ lệ:** Nhận thấy $T$ tỉ lệ thuận với $\\sqrt{l}$. Khi chiều dài tăng gấp 4 lần ($l' = 4l$), giá trị $\\sqrt{l'}$ sẽ tăng gấp $\\sqrt{4} = 2$ lần.`,
-
-    'q-chem-1': `**Gợi ý tư duy:**
-1. **Nguyên lý Le Chatelier:** Một hệ cân bằng bị thay đổi một yếu tố (áp suất, nhiệt độ, nồng độ) thì cân bằng sẽ dịch chuyển theo chiều chống lại sự thay đổi đó.
-2. **Tác động áp suất:** Chỉ ảnh hưởng khi tổng số mol khí trước và sau phản ứng có sự chênh lệch ($\Delta n_{khí} \\neq 0$).`
-  };
-
+  // Fallback if no API key is provided yet
+  await new Promise((r) => setTimeout(r, 350));
   return {
     success: true,
-    source: 'sample-tutor',
-    content: sampleHints[questionId] || `**Hướng dẫn giải gợi mở:**
-1. Đọc kỹ giả thiết và xác định rõ đại lượng cần tìm.
-2. Liên hệ công thức định nghĩa trực tiếp liên quan đến đại lượng đó.
-3. Kiểm tra tính đồng nhất của đơn vị trước khi tính toán.`
+    isLocalFallback: true,
+    text: getLocalPedagogicalFallback(contextData, messages[messages.length - 1]?.text)
   };
+}
+
+function getLocalPedagogicalFallback(context, lastUserMsg = '') {
+  if (context && context.userWrongAnswer) {
+    return `### Phân tích lỗi sai:
+Bạn vừa chọn phương án **${context.userWrongAnswer}**, trong khi đáp án chính xác là **${context.correctAnswer}**.
+
+**1. Điểm nhầm lẫn phổ biến:**
+Học sinh lớp 10 thường gặp bẫy ở bước xác định điều kiện biên hoặc định lý tương ứng. 
+
+**2. Bản chất lý thuyết:**
+${context.explanation || 'Hãy kiểm tra lại mối liên hệ giữa các đại lượng trong công thức và chú ý điều kiện áp dụng.'}
+
+**3. Hướng khắc phục:**
+Xem lại công thức chuẩn của bài học và thử tính toán lại theo từng bước. Nếu bạn muốn giải thích sâu hơn, bạn có thể gõ câu hỏi tiếp theo ở bên dưới hoặc gắn Gemini API Key của bạn tại nút ⚙ ở trên nhé!`;
+  }
+
+  return `Chào bạn, mình là Trợ giảng AI cho chương trình Lớp 10.
+Mình có thể giúp bạn giải đáp các vấn đề về:
+- **Toán 10:** Tập hợp, Bất phương trình, Vectơ, Lượng giác trong tam giác.
+- **Vật lí 10:** Động học, 3 định luật Newton, Công & Năng lượng.
+- **Hóa học 10:** Cấu tạo nguyên tử, Bảng tuần hoàn, Oxi hóa - khử.
+- **Tin học 10:** Mã hóa nhị phân, Lập trình Python cơ bản.
+
+*Mẹo: Bạn có thể nhập Gemini API Key của bạn tại nút ⚙ góc trên để kích hoạt mô hình gemini-2.5-flash trực tiếp.*`;
 }

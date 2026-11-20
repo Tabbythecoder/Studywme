@@ -5,12 +5,51 @@
   :root {
     --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
+
+    /* Light Theme (Linear/Raycast Precision) */
+    --bg-primary: #FAFAFA;
+    --bg-secondary: #FFFFFF;
+    --bg-tertiary: #F3F4F6;
+    --border-subtle: #E5E7EB;
+    --border-hover: #D1D5DB;
+    --text-primary: #111827;
+    --text-secondary: #4B5563;
+    --text-muted: #9CA3AF;
+    --accent: #10B981;
+    --accent-light: rgba(16, 185, 129, 0.08);
+    --accent-border: rgba(16, 185, 129, 0.25);
+    --error: #EF4444;
+    --error-bg: rgba(239, 68, 68, 0.06);
+    --error-border: rgba(239, 68, 68, 0.25);
+  }
+
+  .dark {
+    /* Dark Theme (Raycast/Linear Precision) */
+    --bg-primary: #0C0D10;
+    --bg-secondary: #14161C;
+    --bg-tertiary: #1B1E26;
+    --border-subtle: #232731;
+    --border-hover: #323745;
+    --text-primary: #F3F4F6;
+    --text-secondary: #9CA3AF;
+    --text-muted: #6B7280;
+    --accent: #10B981;
+    --accent-light: rgba(16, 185, 129, 0.12);
+    --accent-border: rgba(16, 185, 129, 0.35);
+    --error: #F87171;
+    --error-bg: rgba(239, 68, 68, 0.12);
+    --error-border: rgba(239, 68, 68, 0.35);
+  }
+
+  * {
+    border-color: var(--border-subtle);
   }
 
   body {
     font-family: var(--font-sans);
-    background-color: #FAFAFA;
-    color: #111827;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
 
   code, pre, .font-mono {
@@ -36,18 +75,18 @@
   transform: rotateY(180deg);
 }
 
-/* Custom subtle scrollbar */
+/* Minimalist scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #E5E7EB;
-  border-radius: 9999px;
+  background: var(--border-subtle);
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #D1D5DB;
+  background: var(--border-hover);
 }

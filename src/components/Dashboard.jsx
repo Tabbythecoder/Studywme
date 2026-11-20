@@ -1,143 +1,108 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ArrowRight, BookOpen, Clock, CheckCircle } from 'lucide-react';
+import { ArrowRight, BookOpen, Clock, CheckCircle2 } from 'lucide-react';
 
 const EASING = [0.16, 1, 0.3, 1];
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.08,
-      delayChildren: 0.05
-    }
-  }
-};
-
-const cardVariants = {
-  hidden: { opacity: 0, y: 12 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: {
-      duration: 0.4,
-      ease: EASING
-    }
-  }
-};
-
 export default function Dashboard({ subjects, onSelectSubject }) {
-  const overallCompleted = subjects.reduce((acc, s) => acc + s.completedLessons, 0);
-  const overallTotal = subjects.reduce((acc, s) => acc + s.totalLessons, 0);
-  const overallPercent = Math.round((overallCompleted / overallTotal) * 100);
+  const totalLessons = subjects.reduce((acc, s) => acc + s.lessons.length, 0);
+  const completedLessons = subjects.reduce(
+    (acc, s) => acc + s.lessons.filter((l) => l.status === 'Hoàn thành').length,
+    0
+  );
+  const overallPercentage = Math.round((completedLessons / totalLessons) * 100);
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
-      {/* Header section */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: EASING }}
-        className="mb-8"
-      >
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-6 border-b border-[#E5E7EB]">
-          <div>
-            <span className="text-xs font-mono uppercase tracking-wider text-[#6B7280]">
-              Không gian học tập cá nhân
-            </span>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#111827] mt-1">
-              Tổng quan tiến độ
-            </h1>
-            <p className="text-sm text-[#4B5563] mt-1.5 max-w-lg">
-              Theo dõi lộ trình các môn học khoa học tự nhiên. Tập trung cao độ với giao diện tối giản chuẩn mực.
-            </p>
+    <div className="max-w-5xl mx-auto px-4 py-8">
+      {/* Top Banner / Welcome */}
+      <div className="pb-6 mb-8 border-b border-[var(--border-subtle)] flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div>
+          <div className="text-[11px] font-mono uppercase tracking-wider text-[var(--text-muted)] mb-1">
+            Chương trình GDPT 2018 chuẩn
           </div>
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[var(--text-primary)]">
+            Tổng quan học tập Lớp 10
+          </h1>
+          <p className="text-xs sm:text-sm text-[var(--text-secondary)] mt-1 max-w-lg leading-relaxed">
+            Học tập tinh gọn theo chuẩn Linear & Raycast. Rèn luyện tư duy thực chất qua từng bài học và trợ giảng AI.
+          </p>
+        </div>
 
-          <div className="flex items-center gap-4 bg-[#FFFFFF] border border-[#E5E7EB] rounded-lg p-3">
-            <div>
-              <div className="text-xs text-[#6B7280]">Tổng tiến độ hoàn thành</div>
-              <div className="text-lg font-bold font-mono text-[#111827]">
-                {overallPercent}%
-              </div>
+        {/* Global Progress Metric */}
+        <div className="flex items-center gap-4 p-3 rounded-[6px] border border-[var(--border-subtle)] bg-[var(--bg-secondary)] self-start sm:self-auto">
+          <div>
+            <div className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-wider">
+              Tiến độ chung
             </div>
-            <div className="w-16 h-16 relative flex items-center justify-center">
-              <div className="text-xs font-mono text-[#6B7280] text-center">
-                <span className="text-[#10B981] font-semibold">{overallCompleted}</span>
-                <span className="text-[#9CA3AF]">/</span>
-                <span>{overallTotal}</span>
-                <div className="text-[10px] text-[#9CA3AF]">bài</div>
-              </div>
+            <div className="text-base font-semibold font-mono text-[var(--text-primary)]">
+              {overallPercentage}%
             </div>
+          </div>
+          <div className="h-6 w-[1px] bg-[var(--border-subtle)]" />
+          <div className="text-xs font-mono text-[var(--text-secondary)]">
+            <strong className="text-[var(--accent)]">{completedLessons}</strong> / {totalLessons} bài
           </div>
         </div>
-      </motion.div>
+      </div>
 
-      {/* Subject cards grid */}
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"
-      >
-        {subjects.map((sub) => (
-          <motion.div
-            key={sub.id}
-            variants={cardVariants}
-            className="group bg-[#FFFFFF] border border-[#E5E7EB] hover:border-[#D1D5DB] rounded-xl p-5 flex flex-col justify-between transition-colors shadow-none"
-          >
-            <div>
-              {/* Header badge & code */}
-              <div className="flex items-center justify-between mb-3">
-                <span className="font-mono text-xs px-2 py-0.5 rounded border border-[#E5E7EB] bg-[#FAFAFA] text-[#4B5563]">
-                  {sub.code}
-                </span>
-                <span className="text-xs font-mono text-[#10B981] font-medium">
-                  {sub.progress}%
-                </span>
+      {/* Grid of Grade 10 Subjects */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {subjects.map((sub) => {
+          const completed = sub.lessons.filter((l) => l.status === 'Hoàn thành').length;
+          const pct = Math.round((completed / sub.lessons.length) * 100);
+
+          return (
+            <div
+              key={sub.id}
+              onClick={() => onSelectSubject(sub.id)}
+              className="group p-5 rounded-[6px] border border-[var(--border-subtle)] hover:border-[var(--border-hover)] bg-[var(--bg-secondary)] cursor-pointer transition-all flex flex-col justify-between"
+            >
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[11px] font-mono px-2 py-0.5 rounded border border-[var(--border-subtle)] bg-[var(--bg-primary)] text-[var(--text-muted)]">
+                    {sub.code}
+                  </span>
+                  <span className="text-xs font-mono text-[var(--accent)] font-medium">
+                    {pct}%
+                  </span>
+                </div>
+
+                <h3 className="text-base font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors">
+                  {sub.title}
+                </h3>
+                <p className="text-xs text-[var(--text-secondary)] mt-1.5 line-clamp-2 leading-relaxed">
+                  {sub.description}
+                </p>
+
+                {/* Ultra-thin 2px progress bar */}
+                <div className="mt-5">
+                  <div className="flex justify-between text-[11px] font-mono text-[var(--text-muted)] mb-1.5">
+                    <span>{completed} / {sub.lessons.length} bài hoàn thành</span>
+                  </div>
+                  <div className="h-[2px] w-full bg-[var(--border-subtle)] rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-[var(--accent)] rounded-full transition-all duration-300"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
               </div>
 
-              {/* Title & Description */}
-              <h3 className="text-base font-semibold text-[#111827] group-hover:text-[#10B981] transition-colors leading-snug">
-                {sub.title}
-              </h3>
-              <p className="text-xs text-[#6B7280] mt-2 line-clamp-2 leading-relaxed">
-                {sub.description}
-              </p>
+              {/* Action row */}
+              <div className="mt-5 pt-3.5 border-t border-[var(--border-subtle)] flex items-center justify-between">
+                <span className="text-[11px] font-mono text-[var(--text-muted)]">
+                  {sub.lessons.length} bài học
+                </span>
 
-              {/* Slim 4px progress bar */}
-              <div className="mt-5">
-                <div className="flex justify-between items-center text-[11px] font-mono text-[#6B7280] mb-1.5">
-                  <span>Tiến độ học</span>
-                  <span>{sub.completedLessons} / {sub.totalLessons} bài</span>
-                </div>
-                <div className="h-1 w-full bg-[#F3F4F6] rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-[#10B981] rounded-full transition-all duration-500 ease-out"
-                    style={{ width: `${sub.progress}%` }}
-                  />
+                <div className="inline-flex items-center gap-1 text-xs font-medium text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors">
+                  <span>Xem chi tiết</span>
+                  <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
                 </div>
               </div>
             </div>
-
-            {/* Bottom action button */}
-            <div className="mt-6 pt-4 border-t border-[#F3F4F6] flex items-center justify-between">
-              <span className="text-xs text-[#9CA3AF] flex items-center gap-1 font-mono">
-                <Clock className="w-3.5 h-3.5" />
-                {sub.lesson.readTime}
-              </span>
-
-              <button
-                onClick={() => onSelectSubject(sub)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium text-[#111827] bg-[#FAFAFA] hover:bg-[#10B981] hover:text-white border border-[#E5E7EB] hover:border-[#10B981] transition-all"
-              >
-                <span>Tiếp tục học</span>
-                <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
-              </button>
-            </div>
-          </motion.div>
-        ))}
-      </motion.div>
+          );
+        })}
+      </div>
     </div>
   );
 }
