@@ -1,6 +1,6 @@
 /**
  * Studywme AI Tutor Client Service
- * Calls /api/chat and surfaces exact API errors directly to the user.
+ * Calls /api/chat with auto-retry support and displays friendly messages.
  */
 
 export async function sendChatMessageToTutor({ messages, contextData = null }) {
@@ -30,14 +30,15 @@ export async function sendChatMessageToTutor({ messages, contextData = null }) {
       }
     }
 
-    // If server responded with non-JSON or status error
+    // If server responded with status error
     if (!res.ok) {
-      const rawText = await res.text();
-      return {
-        success: false,
-        isError: true,
-        text: `⚠️ **Lỗi kết nối Serverless /api/chat (HTTP ${res.status}):**\n\`\`\`\n${rawText.slice(0, 500)}\n\`\`\`\n\nVui lòng kiểm tra lại thiết lập Vercel Serverless Function.`
-      };
+      if (res.status === 503 || res.status === 429) {
+        return {
+          success: false,
+          isError: true,
+          text: 'Gia sư AI đang bận một chút, bạn bấm thử lại sau vài giây nhé!'
+        };
+      }
     }
   } catch (err) {
     console.error('Fetch /api/chat network error:', err);
@@ -69,54 +70,52 @@ export async function sendChatMessageToTutor({ messages, contextData = null }) {
           contents.push({ role: 'user', parts: [{ text: contextPrefix || 'Xin chào gia sư' }] });
         }
 
-        const directRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${clientKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents,
-              generationConfig: { temperature: 0.35, maxOutputTokens: 1000 }
-            })
-          }
-        );
+        // Try primary model then fallback
+        const models = ['gemini-3.8-flash', 'gemini-3.8-flash-lite', 'gemini-2.0-flash'];
+        for (const m of models) {
+          try {
+            const directRes = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${clientKey}`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  contents,
+                  generationConfig: { temperature: 0.35, maxOutputTokens: 1000 }
+                })
+              }
+            );
 
-        const directData = await directRes.json().catch(() => ({}));
-        if (directRes.ok) {
-          const directReply = directData.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (directReply) {
-            return {
-              success: true,
-              text: directReply,
-              modelUsed: 'gemini-3.8-flash (client)'
-            };
+            const directData = await directRes.json().catch(() => ({}));
+            if (directRes.ok) {
+              const directReply = directData.candidates?.[0]?.content?.parts?.[0]?.text;
+              if (directReply) {
+                return {
+                  success: true,
+                  text: directReply,
+                  modelUsed: `${m} (direct)`
+                };
+              }
+            }
+          } catch {
+            // try next model
           }
-        } else {
-          return {
-            success: false,
-            isError: true,
-            text: `⚠️ **Lỗi từ Google Gemini API (Client direct - HTTP ${directRes.status}):**\n\`\`\`json\n${JSON.stringify(directData.error || directData, null, 2)}\n\`\`\``
-          };
         }
       } catch (directErr) {
-        return {
-          success: false,
-          isError: true,
-          text: `⚠️ **Không thể kết nối đến Google Gemini API:** ${directErr.message}`
-        };
+        console.error('Direct Gemini error:', directErr);
       }
     }
 
     return {
       success: false,
       isError: true,
-      text: `⚠️ **Lỗi mạng khi kết nối /api/chat:** ${err.message}`
+      text: 'Gia sư AI đang bận một chút, bạn bấm thử lại sau vài giây nhé!'
     };
   }
 
   return {
     success: false,
     isError: true,
-    text: '⚠️ Không nhận được phản hồi hợp lệ từ server.'
+    text: 'Gia sư AI đang bận một chút, bạn bấm thử lại sau vài giây nhé!'
   };
 }
