@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import Taskbar from './components/Taskbar';
+import HomeView from './components/HomeView';
 import Dashboard from './components/Dashboard';
 import SubjectView from './components/SubjectView';
 import LessonDetail from './components/LessonDetail';
@@ -16,8 +17,8 @@ export default function App() {
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
 
-  // Active navigation tab: 'dashboard' | 'math10' | 'physics10' | 'chemistry10' | 'cs10'
-  const [activeTab, setActiveTab] = useState('dashboard');
+  // Active navigation tab: 'home' | 'dashboard' | 'math10' | 'physics10' | 'chemistry10' | 'cs10'
+  const [activeTab, setActiveTab] = useState('home');
 
   // Active lesson selected inside a subject
   const [activeLesson, setActiveLesson] = useState(null);
@@ -98,7 +99,14 @@ export default function App() {
 
       {/* 3. Main Content Views */}
       <main className="flex-1">
-        {activeTab === 'dashboard' ? (
+        {activeTab === 'home' ? (
+          <HomeView
+            isDark={isDark}
+            onStartLearning={() => handleSelectTab('dashboard')}
+            onOpenSubject={(subjectId) => handleSelectTab(subjectId)}
+            onOpenAITutor={() => handleOpenAITutor(null)}
+          />
+        ) : activeTab === 'dashboard' ? (
           <Dashboard
             subjects={grade10Subjects}
             onSelectSubject={handleSelectTab}
@@ -120,7 +128,7 @@ export default function App() {
         ) : null}
       </main>
 
-      {/* 4. Slide-over AI Tutor Drawer (BYOK Gemini Ready) */}
+      {/* 4. Slide-over AI Tutor Drawer (Automatic Gemini 2.5) */}
       <AITutorDrawer
         isOpen={isAITutorOpen}
         onClose={handleCloseAITutor}

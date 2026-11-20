@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { LayoutDashboard, Calculator, Zap, FlaskConical, Terminal, Bot } from 'lucide-react';
-
-const EASING = [0.16, 1, 0.3, 1];
+import { Home, LayoutDashboard, Calculator, Zap, FlaskConical, Terminal, Bot } from 'lucide-react';
 
 export default function Taskbar({ activeTab, onSelectTab, onOpenAITutor }) {
   const [hoveredTab, setHoveredTab] = useState(null);
 
   const tabs = [
+    { id: 'home', label: 'Trang chủ', icon: Home },
     { id: 'dashboard', label: 'Tổng quan', icon: LayoutDashboard },
     { id: 'math10', label: 'Toán 10', icon: Calculator },
     { id: 'physics10', label: 'Vật lí 10', icon: Zap },
@@ -25,7 +24,7 @@ export default function Taskbar({ activeTab, onSelectTab, onOpenAITutor }) {
   };
 
   return (
-    <nav className="w-full bg-[var(--bg-secondary)] border-b border-[var(--border-subtle)] px-4 py-2 transition-colors">
+    <nav className="w-full bg-[var(--bg-secondary)] border-b border-[var(--border-subtle)] px-4 py-2 transition-colors sticky top-13 z-30">
       <div className="max-w-6xl mx-auto flex items-center justify-between overflow-x-auto no-scrollbar">
         {/* Navigation list */}
         <div
@@ -47,21 +46,35 @@ export default function Taskbar({ activeTab, onSelectTab, onOpenAITutor }) {
                     ? 'text-[var(--text-primary)]'
                     : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                 }`}
+                style={{
+                  transform: 'translate3d(0, 0, 0)',
+                  WebkitFontSmoothing: 'antialiased'
+                }}
               >
-                {/* Active sliding indicator pill (LayoutId) */}
+                {/* Active sliding indicator pill (Physical spring: stiffness 420, damping 32) */}
                 {isActive && (
                   <motion.div
                     layoutId="activeTaskbarPill"
-                    transition={{ type: 'spring', stiffness: 500, damping: 38 }}
+                    transition={{
+                      type: 'spring',
+                      stiffness: 420,
+                      damping: 32,
+                      mass: 0.8
+                    }}
                     className="absolute inset-0 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-[4px] shadow-sm z-[-1]"
                   />
                 )}
 
-                {/* Subtle hover indicator if not active */}
+                {/* Smooth hover indicator if not active */}
                 {!isActive && isHovered && (
                   <motion.div
                     layoutId="hoverTaskbarPill"
-                    transition={{ duration: 0.15, ease: EASING }}
+                    transition={{
+                      type: 'spring',
+                      stiffness: 420,
+                      damping: 32,
+                      mass: 0.8
+                    }}
                     className="absolute inset-0 bg-[var(--bg-tertiary)] rounded-[4px] z-[-2]"
                   />
                 )}
@@ -79,12 +92,12 @@ export default function Taskbar({ activeTab, onSelectTab, onOpenAITutor }) {
           })}
         </div>
 
-        {/* Minimalist keyboard shortcut note */}
+        {/* Minimalist status badge */}
         <div className="hidden md:flex items-center gap-2 text-[11px] font-mono text-[var(--text-muted)] pl-4">
           <span className="px-1.5 py-0.5 rounded border border-[var(--border-subtle)] bg-[var(--bg-primary)]">
-            ESC
+            GDPT 2018
           </span>
-          <span>Đóng khung</span>
+          <span>Lớp 10</span>
         </div>
       </div>
     </nav>

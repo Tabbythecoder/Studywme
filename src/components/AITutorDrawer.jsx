@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Send, Settings, Sparkles, AlertCircle, CheckCircle2, RotateCcw, Key } from 'lucide-react';
-import { sendChatMessageToTutor, getSavedGeminiKey, saveGeminiKey } from '../services/aiTutor';
+import { X, Send, Sparkles, Bot } from 'lucide-react';
+import { sendChatMessageToTutor } from '../services/aiTutor';
 import MathView from './MathView';
 
 const EASING = [0.16, 1, 0.3, 1];
@@ -10,17 +10,7 @@ export default function AITutorDrawer({ isOpen, onClose, contextData }) {
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  const [apiKeyInput, setApiKeyInput] = useState('');
-  const [savedKey, setSavedKey] = useState('');
   const messagesEndRef = useRef(null);
-
-  // Sync API Key
-  useEffect(() => {
-    const key = getSavedGeminiKey();
-    setSavedKey(key);
-    setApiKeyInput(key);
-  }, [isOpen]);
 
   // Handle ESC key to close
   useEffect(() => {
@@ -86,7 +76,7 @@ Bạn có thắc mắc bài toán, định luật vật lí, phương trình hó
         ...prev,
         {
           role: 'model',
-          text: `Đã xảy ra lỗi kết nối: ${err.message}. Bạn hãy thử lại hoặc kiểm tra API Key trong mục Cài đặt ⚙.`,
+          text: `Đã xảy ra lỗi kết nối: ${err.message}. Bạn hãy thử gửi lại câu hỏi nhé.`,
           isError: true,
           timestamp: new Date()
         }
@@ -109,12 +99,6 @@ Bạn có thắc mắc bài toán, định luật vật lí, phương trình hó
     setInputMessage('');
 
     await fetchAIResponse(newMsgs, contextData);
-  };
-
-  const handleSaveKey = () => {
-    saveGeminiKey(apiKeyInput);
-    setSavedKey(apiKeyInput);
-    setShowSettings(false);
   };
 
   // Helper formatter for responses (supporting KaTeX formulas $...$)
@@ -186,76 +170,19 @@ Bạn có thắc mắc bài toán, định luật vật lí, phương trình hó
                 <span className="text-sm font-semibold text-[var(--text-primary)]">
                   Trợ giảng AI Lớp 10
                 </span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-[var(--border-subtle)] bg-[var(--bg-primary)] text-[var(--text-muted)]">
-                  BYOK
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-[var(--border-subtle)] bg-[var(--bg-primary)] text-[var(--accent)]">
+                  Gemini 2.5
                 </span>
               </div>
 
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setShowSettings(!showSettings)}
-                  className={`p-1.5 rounded border transition-colors ${
-                    showSettings || !savedKey
-                      ? 'border-[var(--accent)] text-[var(--accent)] bg-[var(--accent-light)]'
-                      : 'border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                  }`}
-                  title="Cài đặt Gemini API Key"
-                >
-                  <Settings className="w-3.5 h-3.5" />
-                </button>
-
-                <button
-                  onClick={onClose}
-                  className="p-1.5 rounded border border-[var(--border-subtle)] hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
-                  title="Đóng (ESC)"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <button
+                onClick={onClose}
+                className="p-1.5 rounded border border-[var(--border-subtle)] hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                title="Đóng (ESC)"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
-
-            {/* Settings Popover for BYOK Gemini Key */}
-            <AnimatePresence>
-              {showSettings && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.2, ease: EASING }}
-                  className="p-3.5 border-b border-[var(--border-subtle)] bg-[var(--bg-primary)] text-xs overflow-hidden"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
-                      <Key className="w-3.5 h-3.5 text-[var(--accent)]" />
-                      Cấu hình Gemini API Key
-                    </span>
-                    <span className="font-mono text-[10px] text-[var(--text-muted)]">
-                      Lưu trong browser
-                    </span>
-                  </div>
-
-                  <p className="text-[11px] text-[var(--text-secondary)] mb-2.5 leading-relaxed">
-                    Nhập khóa Gemini API của bạn để gọi mô hình <code className="font-mono text-[var(--accent)]">gemini-2.5-flash</code> trực tiếp không giới hạn.
-                  </p>
-
-                  <div className="flex gap-2">
-                    <input
-                      type="password"
-                      placeholder="AIzaSy..."
-                      value={apiKeyInput}
-                      onChange={(e) => setApiKeyInput(e.target.value)}
-                      className="flex-1 px-2.5 py-1.5 rounded border border-[var(--border-subtle)] bg-[var(--bg-secondary)] font-mono text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-                    />
-                    <button
-                      onClick={handleSaveKey}
-                      className="px-3 py-1.5 rounded bg-[var(--accent)] hover:opacity-90 text-white font-medium text-xs transition-opacity"
-                    >
-                      Lưu
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
 
             {/* Context preview banner if attached */}
             {contextData && contextData.question && (
@@ -288,7 +215,7 @@ Bạn có thắc mắc bài toán, định luật vật lí, phương trình hó
                     <div className="text-[10px] font-mono text-[var(--text-muted)] mb-1 px-1">
                       {isUser ? 'Bạn' : 'AI Tutor'}
                       {msg.modelUsed && (
-                        <span className="ml-1 text-[var(--accent)]">({msg.modelUsed})</span>
+                        <span className="ml-1 text-[var(--accent)] font-medium">({msg.modelUsed})</span>
                       )}
                     </div>
 
@@ -312,7 +239,7 @@ Bạn có thắc mắc bài toán, định luật vật lí, phương trình hó
                   </div>
                   <div className="p-3 rounded-[6px] border border-[var(--border-subtle)] bg-[var(--bg-secondary)] text-xs text-[var(--text-muted)] font-mono flex items-center gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-pulse" />
-                    <span>Đang phân tích lỗi sai & suy luận...</span>
+                    <span>Đang phân tích câu sai & suy luận...</span>
                   </div>
                 </div>
               )}
@@ -327,7 +254,7 @@ Bạn có thắc mắc bài toán, định luật vật lí, phương trình hó
             >
               <input
                 type="text"
-                placeholder="Hỏi thêm về bài học này..."
+                placeholder="Hỏi thêm về câu hỏi này..."
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 disabled={isLoading}
