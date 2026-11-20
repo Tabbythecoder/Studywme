@@ -24,7 +24,7 @@ export async function sendChatMessageToTutor({ messages, contextData = null }) {
         return {
           success: data.success !== false,
           text: data.text,
-          modelUsed: data.modelUsed || 'gemini-2.5-flash',
+          modelUsed: data.modelUsed || 'gemini-3.8-flash',
           isError: data.success === false
         };
       }
@@ -70,7 +70,7 @@ export async function sendChatMessageToTutor({ messages, contextData = null }) {
         }
 
         const directRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${clientKey}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${clientKey}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -88,7 +88,7 @@ export async function sendChatMessageToTutor({ messages, contextData = null }) {
             return {
               success: true,
               text: directReply,
-              modelUsed: 'gemini-2.5-flash (client)'
+              modelUsed: 'gemini-3.8-flash (client)'
             };
           }
         } else {

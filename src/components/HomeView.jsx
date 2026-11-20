@@ -237,7 +237,7 @@ export default function HomeView({ isDark, onStartLearning, onOpenSubject, onOpe
                 </span>
               </div>
               <p className="text-xs text-[var(--text-secondary)] max-w-lg leading-relaxed">
-                Được tích hợp sẵn endpoint Google Gemini 2.5 Flash trên máy chủ. Bất cứ khi nào làm sai bài tập, bạn chỉ cần bấm nút "Hỏi AI Tutor" để nhận phân tích tức thì.
+                Được tích hợp sẵn endpoint Google Gemini 3.8 Flash trên máy chủ. Bất cứ khi nào làm sai bài tập, bạn chỉ cần bấm nút "Hỏi AI Tutor" để nhận phân tích tức thì.
               </p>
             </div>
 

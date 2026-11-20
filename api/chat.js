@@ -109,8 +109,8 @@ Nguyên tắc sư phạm:
       });
     }
 
-    // Target Google Gemini 2.5 Flash
-    const model = 'gemini-2.5-flash';
+    // Target Google Gemini 3.8 Flash
+    const model = 'gemini-3.8-flash';
     let lastErrorDetails = null;
 
     try {
@@ -162,7 +162,7 @@ Nguyên tắc sư phạm:
     const errObj = lastErrorDetails?.error || {};
     const errMsg = errObj.message || JSON.stringify(errObj);
     const errStatus = lastErrorDetails?.status || 500;
-    const errModel = lastErrorDetails?.model || 'gemini-2.5-flash';
+    const errModel = lastErrorDetails?.model || 'gemini-3.8-flash';
 
     return sendResponse(res, 200, {
       success: false,

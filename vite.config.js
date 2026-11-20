@@ -47,7 +47,7 @@ Nguyên tắc sư phạm:
               }));
 
               const geminiRes = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey}`,
                 {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -64,7 +64,7 @@ Nguyên tắc sư phạm:
                 const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
                 if (reply) {
                   res.setHeader('Content-Type', 'application/json');
-                  res.end(JSON.stringify({ success: true, text: reply, modelUsed: 'gemini-2.5-flash' }));
+                  res.end(JSON.stringify({ success: true, text: reply, modelUsed: 'gemini-3.8-flash' }));
                   return;
                 }
               }

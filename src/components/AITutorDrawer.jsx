@@ -216,7 +216,7 @@ Bạn có thắc mắc bài toán, định luật vật lí, phương trình hó
                   Trợ giảng AI Lớp 10
                 </span>
                 <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-[var(--border-subtle)] bg-[var(--bg-primary)] text-[var(--accent)]">
-                  Gemini 2.5
+                  Gemini 3.8
                 </span>
               </div>
 
@@ -293,7 +293,7 @@ Bạn có thắc mắc bài toán, định luật vật lí, phương trình hó
                   </div>
                   <div className="p-3 rounded-[6px] border border-[var(--border-subtle)] bg-[var(--bg-secondary)] text-xs text-[var(--text-muted)] font-mono flex items-center gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-pulse" />
-                    <span>Đang gọi Google Gemini 2.5 Flash...</span>
+                    <span>Đang gọi Google Gemini 3.8 Flash...</span>
                   </div>
                 </div>
               )}
