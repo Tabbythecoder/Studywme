@@ -251,6 +251,7 @@ export default function LessonDetail({ subject, lesson, onBack, onOpenAITutorWit
                             <button
                               onClick={() =>
                                 onOpenAITutorWithContext({
+                                  timestamp: Date.now(),
                                   subject: subject.title,
                                   lesson: lesson.title,
                                   question: ex.question,

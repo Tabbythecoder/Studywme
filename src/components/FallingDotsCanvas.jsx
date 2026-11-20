@@ -19,37 +19,68 @@ export default function FallingDotsCanvas({ isDark }) {
     };
     window.addEventListener('resize', handleResize);
 
-    // Generate falling dots
-    // Density: roughly 1 dot per 12,000 px^2 to keep it subtle and not noisy
-    const dotCount = Math.max(25, Math.floor((width * height) / 12000));
-    const dots = Array.from({ length: dotCount }, () => ({
+    // Particle pool
+    const count = isDark ? 40 : 25;
+    const particles = Array.from({ length: count }, () => ({
       x: Math.random() * width,
       y: Math.random() * height,
-      radius: Math.random() * 0.8 + 1.0, // 1.0px - 1.8px
-      speed: Math.random() * 0.25 + 0.15, // Slow, calm vertical falling
-      opacity: isDark ? (Math.random() * 0.2 + 0.15) : (Math.random() * 0.12 + 0.1) // Ultra-subtle
+      radius: isDark ? (Math.random() * 1.0 + 1.0) : (Math.random() * 0.6 + 0.8), // 0.8px - 1.4px in light
+      speedY: isDark ? (Math.random() * 0.3 + 0.15) : (Math.random() * 0.15 + 0.08), // Much slower in light
+      speedX: (Math.random() - 0.5) * 0.1,
+      opacity: isDark ? (Math.random() * 0.25 + 0.15) : (Math.random() * 0.1 + 0.06), // Ultra faint in light
+      color: isDark ? '243, 244, 246' : '16, 185, 129' // Subtle emerald touch in light mode
     }));
+
+    let step = 0;
 
     const render = () => {
       ctx.clearRect(0, 0, width, height);
+      step++;
 
-      // Dot color depends on theme: crisp dark dots in light mode, soft white dots in dark mode
-      const baseColor = isDark ? '243, 244, 246' : '100, 116, 139';
+      // In light mode: Draw subtle Linear dot-matrix pattern as ambient background
+      if (!isDark) {
+        const spacing = 32;
+        const offsetX = (width % spacing) / 2;
+        const offsetY = (height % spacing) / 2;
 
-      for (let i = 0; i < dots.length; i++) {
-        const dot = dots[i];
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.035)'; // Crisp, ultra-subtle Linear grid
+        for (let x = offsetX; x < width; x += spacing) {
+          for (let y = offsetY; y < height; y += spacing) {
+            // Distance from center to fade edges
+            const dx = (x - width / 2) / (width / 2);
+            const dy = (y - height / 2) / (height / 2);
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 1.1) {
+              ctx.beginPath();
+              ctx.arc(x, y, 0.85, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+        }
+      }
+
+      // Draw gentle floating particles
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
         ctx.beginPath();
-        ctx.arc(dot.x, dot.y, dot.radius, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${baseColor}, ${dot.opacity})`;
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+
+        if (isDark) {
+          ctx.fillStyle = `rgba(${p.color}, ${p.opacity})`;
+        } else {
+          // In light mode, soft airy emerald/slate glimmer
+          ctx.fillStyle = `rgba(16, 185, 129, ${p.opacity})`;
+        }
         ctx.fill();
 
-        // Move dot vertically down
-        dot.y += dot.speed;
+        // Update movement
+        p.y += p.speedY;
+        p.x += Math.sin(step * 0.01 + i) * 0.15;
 
-        // Wrap around when reaching bottom
-        if (dot.y > height + 5) {
-          dot.y = -5;
-          dot.x = Math.random() * width;
+        // Wrap around
+        if (p.y > height + 5) {
+          p.y = -5;
+          p.x = Math.random() * width;
         }
       }
 

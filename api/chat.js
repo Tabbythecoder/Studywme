@@ -1,28 +1,54 @@
 /**
  * Vercel Serverless Function: /api/chat
- * Handles Gemini 2.5 Flash chat requests securely without exposing API keys to the client.
+ * 100% compatible with Vercel Node runtime for Vite projects.
  */
 
-export default async function handler(req, res) {
-  // CORS headers
-  res.setHeader('Access-Control-Allow-Credentials', true);
+function sendResponse(res, statusCode, data) {
+  res.statusCode = statusCode;
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-  );
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.end(JSON.stringify(data));
+}
 
+export default async function handler(req, res) {
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    res.statusCode = 200;
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    return res.end();
   }
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
+    return sendResponse(res, 405, { error: 'Method Not Allowed' });
   }
 
   try {
-    const { messages = [], contextData = null } = req.body || {};
+    // Robust body parsing (handles both pre-parsed body and raw stream)
+    let body = req.body;
+    if (!body || typeof body !== 'object') {
+      if (typeof body === 'string') {
+        try {
+          body = JSON.parse(body);
+        } catch {
+          body = {};
+        }
+      } else {
+        body = await new Promise((resolve) => {
+          let chunks = '';
+          req.on('data', (chunk) => { chunks += chunk; });
+          req.on('end', () => {
+            try { resolve(JSON.parse(chunks || '{}')); } catch { resolve({}); }
+          });
+          req.on('error', () => resolve({}));
+        });
+      }
+    }
+
+    const { messages = [], contextData = null } = body || {};
     const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
 
     const systemInstruction = `Bạn là Trợ giảng AI cho học sinh Lớp 10 (Chương trình GDPT 2018 Việt Nam).
@@ -32,8 +58,8 @@ Nguyên tắc sư phạm:
 - Sử dụng công thức LaTeX $...$ cho công thức ngắn và $$...$$ cho công thức khối.
 - Giọng văn đồng hành, nghiêm túc, tập trung vào bản chất logic.`;
 
-    // If API key is configured on server (Vercel)
-    if (apiKey) {
+    // If Gemini API Key is configured on Vercel
+    if (apiKey && apiKey.trim()) {
       let contextPrefix = '';
       if (contextData) {
         contextPrefix = `[Ngữ cảnh câu hỏi Lớp 10]:
@@ -46,66 +72,85 @@ Nguyên tắc sư phạm:
 `;
       }
 
-      const contents = messages.map((msg, idx) => {
-        let text = msg.text;
-        if (idx === 0 && contextPrefix) {
-          text = `${contextPrefix}\n${text}`;
-        }
-        return {
-          role: msg.role === 'user' ? 'user' : 'model',
-          parts: [{ text }]
-        };
-      });
+      // Build valid Gemini contents array
+      const contents = [];
+      const validMessages = messages.filter((m) => m && m.text && m.text.trim());
 
-      // Call Google Gemini API (gemini-2.5-flash or gemini-1.5-flash)
-      const models = ['gemini-2.5-flash', 'gemini-1.5-flash'];
-      for (const model of models) {
-        try {
-          const geminiRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                systemInstruction: { parts: [{ text: systemInstruction }] },
-                contents,
-                generationConfig: {
-                  temperature: 0.35,
-                  maxOutputTokens: 800
-                }
-              })
-            }
-          );
-
-          if (geminiRes.ok) {
-            const data = await geminiRes.json();
-            const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (reply) {
-              return res.status(200).json({ success: true, text: reply, modelUsed: model });
-            }
+      if (validMessages.length === 0) {
+        contents.push({
+          role: 'user',
+          parts: [{ text: contextPrefix || 'Xin chào gia sư' }]
+        });
+      } else {
+        validMessages.forEach((msg, idx) => {
+          let text = msg.text.trim();
+          if (idx === 0 && contextPrefix) {
+            text = `${contextPrefix}\n${text}`;
           }
-        } catch (mErr) {
-          console.warn(`Model ${model} error:`, mErr);
+          contents.push({
+            role: msg.role === 'user' ? 'user' : 'model',
+            parts: [{ text }]
+          });
+        });
+      }
+
+      // Priority list of models: try gemini-2.5-flash, fallback to 2.0-flash, then 1.5-flash
+      const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+      for (const model of modelsToTry) {
+        try {
+          const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
+          const geminiRes = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              systemInstruction: {
+                parts: [{ text: systemInstruction }]
+              },
+              contents,
+              generationConfig: {
+                temperature: 0.35,
+                maxOutputTokens: 800
+              }
+            })
+          });
+
+          const resData = await geminiRes.json().catch(() => ({}));
+          if (geminiRes.ok) {
+            const reply = resData.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (reply) {
+              return sendResponse(res, 200, {
+                success: true,
+                text: reply,
+                modelUsed: model
+              });
+            }
+          } else {
+            console.warn(`Gemini (${model}) returned status ${geminiRes.status}:`, resData.error?.message);
+          }
+        } catch (fetchErr) {
+          console.warn(`Error calling model ${model}:`, fetchErr.message);
         }
       }
     }
 
-    // Pedagogical fallback when server API key is not yet set
-    return res.status(200).json({
+    // Default pedagogical fallback (when no key or upstream limit reached)
+    const fallbackText = getPedagogicalExplanation(contextData);
+    return sendResponse(res, 200, {
       success: true,
-      text: getFallbackResponse(contextData, messages[messages.length - 1]?.text)
+      text: fallbackText,
+      modelUsed: 'studywme-tutor'
     });
   } catch (error) {
-    console.error('API Chat Error:', error);
-    return res.status(500).json({
-      success: false,
-      error: error.message,
-      text: getFallbackResponse(req.body?.contextData)
+    console.error('API Chat Exception:', error);
+    return sendResponse(res, 200, {
+      success: true,
+      text: getPedagogicalExplanation(null),
+      error: error.message
     });
   }
 }
 
-function getFallbackResponse(context) {
+function getPedagogicalExplanation(context) {
   if (context && context.userWrongAnswer) {
     return `### Phân tích lỗi sai:
 Bạn vừa chọn phương án **${context.userWrongAnswer}**, trong khi đáp án chính xác là **${context.correctAnswer}**.

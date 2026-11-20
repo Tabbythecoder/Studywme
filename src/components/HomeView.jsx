@@ -16,7 +16,7 @@ export default function HomeView({ isDark, onStartLearning, onOpenSubject, onOpe
   return (
     <div className="w-full">
       {/* 1. Hero Section (Full viewport height feel) */}
-      <section className="relative min-h-[88vh] flex flex-col items-center justify-center px-4 overflow-hidden bg-[#F4F4F6] dark:bg-[#111113] transition-colors border-b border-[var(--border-subtle)]">
+      <section className="relative min-h-[88vh] flex flex-col items-center justify-center px-4 overflow-hidden bg-[#FAFAFA] dark:bg-[#111113] transition-colors border-b border-[var(--border-subtle)]">
         {/* Subtle Falling Dots Canvas */}
         <FallingDotsCanvas isDark={isDark} />
 
@@ -26,7 +26,7 @@ export default function HomeView({ isDark, onStartLearning, onOpenSubject, onOpe
           style={{
             background: isDark
               ? 'radial-gradient(circle at 50% 45%, transparent 20%, rgba(10, 10, 12, 0.6) 100%)'
-              : 'radial-gradient(circle at 50% 45%, transparent 20%, rgba(220, 220, 225, 0.5) 100%)'
+              : 'radial-gradient(circle at 50% 45%, transparent 40%, rgba(240, 242, 245, 0.4) 100%)'
           }}
         />
 
