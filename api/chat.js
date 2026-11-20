@@ -109,55 +109,53 @@ Nguyên tắc sư phạm:
       });
     }
 
-    // Priority: Try gemini-2.5-flash as requested, then gemini-2.0-flash, then gemini-1.5-flash
-    const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    // Target Google Gemini 2.5 Flash
+    const model = 'gemini-2.5-flash';
     let lastErrorDetails = null;
 
-    for (const model of modelsToTry) {
-      try {
-        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-        const geminiRes = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            systemInstruction: {
-              parts: [{ text: systemInstruction }]
-            },
-            contents,
-            generationConfig: {
-              temperature: 0.35,
-              maxOutputTokens: 1000
-            }
-          })
-        });
-
-        const resData = await geminiRes.json().catch(() => ({}));
-
-        if (geminiRes.ok) {
-          const reply = resData.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (reply) {
-            return sendResponse(res, 200, {
-              success: true,
-              text: reply,
-              modelUsed: model
-            });
+    try {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      const geminiRes = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: {
+            parts: [{ text: systemInstruction }]
+          },
+          contents,
+          generationConfig: {
+            temperature: 0.35,
+            maxOutputTokens: 1000
           }
-        } else {
-          lastErrorDetails = {
-            model,
-            status: geminiRes.status,
-            error: resData.error || resData
-          };
-          console.error(`Google API Error with ${model}:`, geminiRes.status, resData);
+        })
+      });
+
+      const resData = await geminiRes.json().catch(() => ({}));
+
+      if (geminiRes.ok) {
+        const reply = resData.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (reply) {
+          return sendResponse(res, 200, {
+            success: true,
+            text: reply,
+            modelUsed: model
+          });
         }
-      } catch (err) {
+      } else {
         lastErrorDetails = {
           model,
-          status: 500,
-          error: { message: err.message }
+          status: geminiRes.status,
+          error: resData.error || resData
         };
-        console.error(`Fetch exception for ${model}:`, err);
+        console.error(`Google API Error with ${model}:`, geminiRes.status, resData);
       }
+    } catch (err) {
+      lastErrorDetails = {
+        model,
+        status: 500,
+        error: { message: err.message }
+      };
+      console.error(`Fetch exception for ${model}:`, err);
     }
 
     // Return the EXACT error message from Google API to the frontend
