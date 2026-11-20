@@ -1,16 +1,20 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { ArrowRight, BookOpen, Clock, CheckCircle2 } from 'lucide-react';
+import { getSubjectReadingStats } from '../utils/readingProgress';
 
 const EASING = [0.16, 1, 0.3, 1];
 
 export default function Dashboard({ subjects, onSelectSubject }) {
+  const subjectStats = subjects.map((s) => ({
+    subject: s,
+    ...getSubjectReadingStats(s)
+  }));
+
   const totalLessons = subjects.reduce((acc, s) => acc + s.lessons.length, 0);
-  const completedLessons = subjects.reduce(
-    (acc, s) => acc + s.lessons.filter((l) => l.status === 'Hoàn thành').length,
-    0
-  );
-  const overallPercentage = Math.round((completedLessons / totalLessons) * 100);
+  const totalCompleted = subjectStats.reduce((acc, s) => acc + s.completedCount, 0);
+  const totalStarted = subjectStats.reduce((acc, s) => acc + s.startedCount, 0);
+  const overallPercentage = totalLessons > 0 ? Math.round((totalCompleted / totalLessons) * 100) : 0;
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
@@ -40,17 +44,14 @@ export default function Dashboard({ subjects, onSelectSubject }) {
           </div>
           <div className="h-6 w-[1px] bg-[var(--border-subtle)]" />
           <div className="text-xs font-mono text-[var(--text-secondary)]">
-            <strong className="text-[var(--accent)]">{completedLessons}</strong> / {totalLessons} bài
+            <strong className="text-[var(--accent)]">{totalCompleted}</strong> / {totalLessons} bài
           </div>
         </div>
       </div>
 
       {/* Grid of Grade 10 Subjects */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {subjects.map((sub) => {
-          const completed = sub.lessons.filter((l) => l.status === 'Hoàn thành').length;
-          const pct = Math.round((completed / sub.lessons.length) * 100);
-
+        {subjectStats.map(({ subject: sub, completedCount, overallProgress, startedCount }) => {
           return (
             <div
               key={sub.id}
@@ -63,7 +64,7 @@ export default function Dashboard({ subjects, onSelectSubject }) {
                     {sub.code}
                   </span>
                   <span className="text-xs font-mono text-[var(--accent)] font-medium">
-                    {pct}%
+                    {overallProgress}%
                   </span>
                 </div>
 
@@ -74,18 +75,26 @@ export default function Dashboard({ subjects, onSelectSubject }) {
                   {sub.description}
                 </p>
 
-                {/* Ultra-thin 2px progress bar */}
-                <div className="mt-5">
-                  <div className="flex justify-between text-[11px] font-mono text-[var(--text-muted)] mb-1.5">
-                    <span>{completed} / {sub.lessons.length} bài hoàn thành</span>
+                {/* Ultra-thin 2px progress bar - ONLY shown if user has started studying this subject */}
+                {startedCount > 0 ? (
+                  <div className="mt-5">
+                    <div className="flex justify-between text-[11px] font-mono text-[var(--text-muted)] mb-1.5">
+                      <span>{completedCount} / {sub.lessons.length} bài hoàn thành</span>
+                      <span className="text-[var(--accent)]">{overallProgress}%</span>
+                    </div>
+                    <div className="h-[2px] w-full bg-[var(--border-subtle)] rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-[var(--accent)] rounded-full transition-all duration-300"
+                        style={{ width: `${overallProgress}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="h-[2px] w-full bg-[var(--border-subtle)] rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-[var(--accent)] rounded-full transition-all duration-300"
-                      style={{ width: `${pct}%` }}
-                    />
+                ) : (
+                  <div className="mt-5 pt-2 text-[11px] font-mono text-[var(--text-muted)] flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--border-subtle)]" />
+                    <span>Chưa bắt đầu học • {sub.lessons.length} chuyên đề chuẩn GDPT</span>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Action row */}

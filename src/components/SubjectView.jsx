@@ -1,12 +1,12 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ChevronRight, Clock, CheckCircle2, CircleDashed, CircleDot } from 'lucide-react';
+import { ChevronRight, Clock, CheckCircle2, CircleDashed, CircleDot, Play } from 'lucide-react';
+import { getLessonProgress, getSubjectReadingStats } from '../utils/readingProgress';
 
 const EASING = [0.16, 1, 0.3, 1];
 
 export default function SubjectView({ subject, onSelectLesson }) {
-  const completedCount = subject.lessons.filter((l) => l.status === 'Hoàn thành').length;
-  const overallProgress = Math.round((completedCount / subject.lessons.length) * 100);
+  const { completedCount, overallProgress, startedCount } = getSubjectReadingStats(subject);
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
@@ -57,8 +57,9 @@ export default function SubjectView({ subject, onSelectLesson }) {
         {/* Lessons rows */}
         <div className="divide-y divide-[var(--border-subtle)]">
           {subject.lessons.map((lesson, idx) => {
-            const isCompleted = lesson.status === 'Hoàn thành';
-            const isStudying = lesson.status === 'Đang học';
+            const progress = getLessonProgress(lesson.id);
+            const isCompleted = progress >= 90;
+            const isStudying = progress > 0 && progress < 90;
 
             return (
               <div
@@ -68,26 +69,33 @@ export default function SubjectView({ subject, onSelectLesson }) {
               >
                 {/* Index */}
                 <div className="col-span-1 font-mono text-[var(--text-muted)]">
-                  0{idx + 1}
+                  {idx + 1 < 10 ? `0${idx + 1}` : idx + 1}
                 </div>
 
                 {/* Lesson Title & Summary */}
                 <div className="col-span-6 sm:col-span-7 pr-4">
                   <div className="font-medium text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors flex items-center gap-1.5">
                     <span>{lesson.title}</span>
+                    {lesson.simulation && (
+                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded border border-[var(--accent-border)] text-[var(--accent)] bg-[var(--accent-light)]">
+                        Mô hình
+                      </span>
+                    )}
                     <ChevronRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity text-[var(--accent)]" />
                   </div>
                   <div className="text-[11px] text-[var(--text-muted)] mt-0.5 truncate hidden sm:block">
                     {lesson.summary}
                   </div>
 
-                  {/* Ultra-thin 2px progress bar */}
-                  <div className="mt-2 h-[2px] w-full bg-[var(--border-subtle)] rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-[var(--accent)] rounded-full transition-all duration-300"
-                      style={{ width: `${lesson.progress}%` }}
-                    />
-                  </div>
+                  {/* Ultra-thin 2px progress bar - ONLY shown if user has started reading (> 0%) */}
+                  {progress > 0 && (
+                    <div className="mt-2 h-[2px] w-full bg-[var(--border-subtle)] rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-[var(--accent)] rounded-full transition-all duration-300"
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Status chip */}
@@ -106,7 +114,9 @@ export default function SubjectView({ subject, onSelectLesson }) {
                     ) : (
                       <CircleDashed className="w-2.5 h-2.5" />
                     )}
-                    <span>{lesson.status}</span>
+                    <span>
+                      {isCompleted ? 'Hoàn thành' : isStudying ? `Đang học (${progress}%)` : 'Chưa học'}
+                    </span>
                   </span>
                 </div>
 

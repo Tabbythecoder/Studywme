@@ -56,32 +56,69 @@ Bạn có thắc mắc bài toán, định luật vật lí, phương trình hó
 
   const fetchAIResponse = async (chatHistory, ctx) => {
     setIsLoading(true);
+
+    // Append an empty streaming response message
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: 'model',
+        text: '',
+        modelUsed: null,
+        isStreaming: true,
+        timestamp: new Date()
+      }
+    ]);
+
     try {
       const res = await sendChatMessageToTutor({
         messages: chatHistory,
-        contextData: ctx
+        contextData: ctx,
+        onChunk: (streamedText, model, isDone) => {
+          setMessages((prev) => {
+            const copy = [...prev];
+            const last = copy[copy.length - 1];
+            if (last && last.role === 'model') {
+              copy[copy.length - 1] = {
+                ...last,
+                text: streamedText,
+                modelUsed: model || last.modelUsed,
+                isStreaming: !isDone
+              };
+            }
+            return copy;
+          });
+        }
       });
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'model',
-          text: res.text,
-          modelUsed: res.modelUsed,
-          isError: res.isError,
-          timestamp: new Date()
+      // Ensure final state is committed
+      setMessages((prev) => {
+        const copy = [...prev];
+        const last = copy[copy.length - 1];
+        if (last && last.role === 'model') {
+          copy[copy.length - 1] = {
+            ...last,
+            text: res.text || last.text,
+            modelUsed: res.modelUsed || last.modelUsed,
+            isError: res.isError,
+            isStreaming: false
+          };
         }
-      ]);
+        return copy;
+      });
     } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'model',
-          text: `⚠️ **Lỗi kết nối:** ${err.message}`,
-          isError: true,
-          timestamp: new Date()
+      setMessages((prev) => {
+        const copy = [...prev];
+        const last = copy[copy.length - 1];
+        if (last && last.role === 'model') {
+          copy[copy.length - 1] = {
+            ...last,
+            text: 'Gia sư AI đang bận một chút, bạn bấm thử lại sau vài giây nhé!',
+            isError: true,
+            isStreaming: false
+          };
         }
-      ]);
+        return copy;
+      });
     } finally {
       setIsLoading(false);
     }
@@ -280,23 +317,23 @@ Bạn có thắc mắc bài toán, định luật vật lí, phương trình hó
                             : 'bg-[var(--bg-secondary)] border-[var(--border-subtle)] text-[var(--text-primary)]'
                       }`}
                     >
-                      {renderMessageText(msg.text)}
+                      {msg.text ? (
+                        <>
+                          {renderMessageText(msg.text)}
+                          {msg.isStreaming && (
+                            <span className="inline-block w-1.5 h-3 ml-1 bg-[var(--accent)] animate-pulse align-middle" />
+                          )}
+                        </>
+                      ) : msg.isStreaming ? (
+                        <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] font-mono py-0.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-pulse" />
+                          <span>Đang kết nối Trợ giảng AI...</span>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 );
               })}
-
-              {isLoading && (
-                <div className="flex flex-col items-start">
-                  <div className="text-[10px] font-mono text-[var(--text-muted)] mb-1 px-1">
-                    AI Tutor
-                  </div>
-                  <div className="p-3 rounded-[6px] border border-[var(--border-subtle)] bg-[var(--bg-secondary)] text-xs text-[var(--text-muted)] font-mono flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-pulse" />
-                    <span>Đang kết nối Trợ giảng AI...</span>
-                  </div>
-                </div>
-              )}
 
               <div ref={messagesEndRef} />
             </div>

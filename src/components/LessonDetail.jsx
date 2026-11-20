@@ -1,13 +1,46 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Check, X, Bot, ArrowLeft, Clock, BookOpen, RotateCcw } from 'lucide-react';
 import MathView from './MathView';
+import InteractiveSim from './simulations/InteractiveSim';
+import { getLessonProgress, saveLessonProgress } from '../utils/readingProgress';
 
 const EASING = [0.16, 1, 0.3, 1];
 
 export default function LessonDetail({ subject, lesson, onBack, onOpenAITutorWithContext }) {
   const [answers, setAnswers] = useState({});
   const [submissions, setSubmissions] = useState({});
+  const [scrollProgress, setScrollProgress] = useState(() => getLessonProgress(lesson.id));
+
+  // Scroll-driven Reading Progress (0% -> 100%)
+  useEffect(() => {
+    let ticking = false;
+
+    const calculateProgress = () => {
+      const scrollHeight = document.documentElement.scrollHeight - window.innerHeight;
+      if (scrollHeight > 0) {
+        const scrolled = window.scrollY;
+        const pct = Math.min(100, Math.max(0, Math.round((scrolled / scrollHeight) * 100)));
+        setScrollProgress((prev) => {
+          const next = Math.max(prev, pct);
+          saveLessonProgress(lesson.id, next);
+          return next;
+        });
+      }
+      ticking = false;
+    };
+
+    const onScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(calculateProgress);
+        ticking = true;
+      }
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    calculateProgress();
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [lesson.id]);
 
   const handleSelectOption = (exerciseId, optionId) => {
     if (submissions[exerciseId]) return;
@@ -34,7 +67,15 @@ export default function LessonDetail({ subject, lesson, onBack, onOpenAITutorWit
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
+    <div className="max-w-5xl mx-auto px-4 py-8 relative">
+      {/* Fixed ultra-thin scroll reading progress bar (height: 2.5px) */}
+      <div className="fixed top-[92px] left-0 right-0 h-[2.5px] bg-transparent z-40 pointer-events-none">
+        <div
+          className="h-full bg-[var(--accent)] transition-[width] duration-150 ease-out"
+          style={{ width: `${scrollProgress}%` }}
+        />
+      </div>
+
       {/* Top back navigation */}
       <div className="flex items-center justify-between pb-4 mb-6 border-b border-[var(--border-subtle)]">
         <button
@@ -45,9 +86,16 @@ export default function LessonDetail({ subject, lesson, onBack, onOpenAITutorWit
           <span>Quay lại danh sách {subject.title}</span>
         </button>
 
-        <div className="flex items-center gap-2 text-xs font-mono text-[var(--text-muted)]">
-          <Clock className="w-3.5 h-3.5" />
-          <span>{lesson.readTime}</span>
+        <div className="flex items-center gap-3 text-xs font-mono text-[var(--text-muted)]">
+          {scrollProgress > 0 && (
+            <span className="text-[11px] font-mono px-2 py-0.5 rounded border border-[var(--accent-border)] bg-[var(--accent-light)] text-[var(--accent)]">
+              Đã đọc: {scrollProgress}%
+            </span>
+          )}
+          <div className="flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5" />
+            <span>{lesson.readTime}</span>
+          </div>
         </div>
       </div>
 
@@ -59,13 +107,13 @@ export default function LessonDetail({ subject, lesson, onBack, onOpenAITutorWit
           </span>
           <span className="text-xs text-[var(--text-muted)]">/</span>
           <span className={`text-[11px] font-mono px-2 py-0.5 rounded border ${
-            lesson.status === 'Hoàn thành'
+            scrollProgress >= 90
               ? 'border-[var(--accent-border)] bg-[var(--accent-light)] text-[var(--accent)]'
-              : lesson.status === 'Đang học'
+              : scrollProgress > 0
                 ? 'border-amber-500/20 bg-amber-500/10 text-amber-500'
                 : 'border-[var(--border-subtle)] text-[var(--text-muted)]'
           }`}>
-            {lesson.status}
+            {scrollProgress >= 90 ? 'Đã hoàn thành' : scrollProgress > 0 ? `Đang học (${scrollProgress}%)` : 'Bắt đầu học'}
           </span>
         </div>
         <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[var(--text-primary)]">
@@ -129,6 +177,13 @@ export default function LessonDetail({ subject, lesson, onBack, onOpenAITutorWit
               ))}
             </div>
           </div>
+
+          {/* Integrated Interactive Simulation if available */}
+          {lesson.simulation && (
+            <div className="pt-2">
+              <InteractiveSim type={lesson.simulation} />
+            </div>
+          )}
         </div>
 
         {/* Right Column: Practice & Questions (5 cols) */}

@@ -1,9 +1,9 @@
 /**
  * Studywme AI Tutor Client Service
- * Calls /api/chat with auto-retry support and displays friendly messages.
+ * High-speed Streaming with Server-Sent Events (SSE) and Progressive Chunk Rendering.
  */
 
-export async function sendChatMessageToTutor({ messages, contextData = null }) {
+export async function sendChatMessageToTutor({ messages, contextData = null, onChunk = null }) {
   try {
     const res = await fetch('/api/chat', {
       method: 'POST',
@@ -16,106 +16,85 @@ export async function sendChatMessageToTutor({ messages, contextData = null }) {
       })
     });
 
-    // If server responded with JSON
-    const contentType = res.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      const data = await res.json();
-      if (data && data.text) {
-        return {
-          success: data.success !== false,
-          text: data.text,
-          modelUsed: data.modelUsed || 'gemini-3.8-flash',
-          isError: data.success === false
-        };
-      }
-    }
-
-    // If server responded with status error
     if (!res.ok) {
-      if (res.status === 503 || res.status === 429) {
-        return {
-          success: false,
-          isError: true,
-          text: 'Gia sư AI đang bận một chút, bạn bấm thử lại sau vài giây nhé!'
-        };
-      }
+      const fallbackMsg = 'Gia sư AI đang bận một chút, bạn bấm thử lại sau vài giây nhé!';
+      onChunk?.(fallbackMsg, null, true);
+      return {
+        success: false,
+        text: fallbackMsg,
+        modelUsed: null,
+        isError: true
+      };
     }
-  } catch (err) {
-    console.error('Fetch /api/chat network error:', err);
 
-    // Fallback: If client-side VITE_GEMINI_API_KEY is embedded in browser bundle
-    const clientKey = (import.meta.env.VITE_GEMINI_API_KEY || '').trim();
-    if (clientKey) {
-      try {
-        let contextPrefix = '';
-        if (contextData) {
-          contextPrefix = `[Ngữ cảnh câu hỏi Lớp 10]:
-- Môn học: ${contextData.subject || 'Lớp 10'}
-- Bài học: ${contextData.lesson || ''}
-- Đề bài: "${contextData.question || ''}"
-- Học sinh vừa chọn sai: "${contextData.userWrongAnswer || ''}"
-- Đáp án đúng: "${contextData.correctAnswer || ''}"
----
-`;
-        }
+    if (!res.body) {
+      const fallbackMsg = 'Gia sư AI đang bận một chút, bạn bấm thử lại sau vài giây nhé!';
+      onChunk?.(fallbackMsg, null, true);
+      return {
+        success: false,
+        text: fallbackMsg,
+        modelUsed: null,
+        isError: true
+      };
+    }
 
-        const contents = (messages || [])
-          .filter((m) => m && m.text && m.text.trim())
-          .map((msg, idx) => ({
-            role: msg.role === 'user' ? 'user' : 'model',
-            parts: [{ text: idx === 0 && contextPrefix ? `${contextPrefix}\n${msg.text}` : msg.text }]
-          }));
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    let accumulatedText = '';
+    let modelUsed = 'gemini-3.8-flash';
+    let isError = false;
 
-        if (contents.length === 0) {
-          contents.push({ role: 'user', parts: [{ text: contextPrefix || 'Xin chào gia sư' }] });
-        }
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-        // Try primary model then fallback
-        const models = ['gemini-3.8-flash', 'gemini-3.8-flash-lite', 'gemini-2.0-flash'];
-        for (const m of models) {
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // keep partial chunk
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('data:')) {
+          const jsonStr = trimmed.slice(5).trim();
+          if (!jsonStr) continue;
           try {
-            const directRes = await fetch(
-              `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${clientKey}`,
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  contents,
-                  generationConfig: { temperature: 0.35, maxOutputTokens: 1000 }
-                })
-              }
-            );
-
-            const directData = await directRes.json().catch(() => ({}));
-            if (directRes.ok) {
-              const directReply = directData.candidates?.[0]?.content?.parts?.[0]?.text;
-              if (directReply) {
-                return {
-                  success: true,
-                  text: directReply,
-                  modelUsed: `${m} (direct)`
-                };
-              }
+            const data = JSON.parse(jsonStr);
+            if (data.model) {
+              modelUsed = data.model;
+            }
+            if (data.error) {
+              isError = true;
+              accumulatedText = data.text || 'Gia sư AI đang bận một chút, bạn bấm thử lại sau vài giây nhé!';
+              onChunk?.(accumulatedText, modelUsed, false);
+            } else if (data.chunk) {
+              accumulatedText += data.chunk;
+              onChunk?.(accumulatedText, modelUsed, false);
+            } else if (data.done) {
+              onChunk?.(accumulatedText, modelUsed, true);
             }
           } catch {
-            // try next model
+            // ignore non-json stream artefacts
           }
         }
-      } catch (directErr) {
-        console.error('Direct Gemini error:', directErr);
       }
     }
 
     return {
+      success: !isError && accumulatedText.length > 0,
+      text: accumulatedText || 'Gia sư AI đang bận một chút, bạn bấm thử lại sau vài giây nhé!',
+      modelUsed,
+      isError
+    };
+  } catch (err) {
+    console.error('Fetch /api/chat network error:', err);
+    const errorMsg = 'Gia sư AI đang bận một chút, bạn bấm thử lại sau vài giây nhé!';
+    onChunk?.(errorMsg, null, true);
+    return {
       success: false,
       isError: true,
-      text: 'Gia sư AI đang bận một chút, bạn bấm thử lại sau vài giây nhé!'
+      text: errorMsg,
+      modelUsed: null
     };
   }
-
-  return {
-    success: false,
-    isError: true,
-    text: 'Gia sư AI đang bận một chút, bạn bấm thử lại sau vài giây nhé!'
-  };
 }
