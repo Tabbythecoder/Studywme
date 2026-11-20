@@ -25,16 +25,16 @@ export default function FallingDotsCanvas({ isDark }) {
     const dots = Array.from({ length: dotCount }, () => ({
       x: Math.random() * width,
       y: Math.random() * height,
-      radius: Math.random() * 1.0 + 1.2, // 1.2px - 2.2px
-      speed: Math.random() * 0.35 + 0.2, // Slow, calm vertical falling
-      opacity: Math.random() * 0.25 + 0.15 // Low opacity: 0.15 - 0.4
+      radius: Math.random() * 0.8 + 1.0, // 1.0px - 1.8px
+      speed: Math.random() * 0.25 + 0.15, // Slow, calm vertical falling
+      opacity: isDark ? (Math.random() * 0.2 + 0.15) : (Math.random() * 0.12 + 0.1) // Ultra-subtle
     }));
 
     const render = () => {
       ctx.clearRect(0, 0, width, height);
 
-      // Dot color depends on theme
-      const baseColor = isDark ? '243, 244, 246' : '30, 41, 59';
+      // Dot color depends on theme: crisp dark dots in light mode, soft white dots in dark mode
+      const baseColor = isDark ? '243, 244, 246' : '100, 116, 139';
 
       for (let i = 0; i < dots.length; i++) {
         const dot = dots[i];
